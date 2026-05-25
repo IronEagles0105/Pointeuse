@@ -1,0 +1,820 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="Pointeuse">
+  <meta name="theme-color" content="#f2f2f7" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
+  <title>Pointeuse</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="apple-touch-icon" href="icon-apple.png">
+  <style>
+    :root {
+      --bg:     #f2f2f7;
+      --bg2:    #ffffff;
+      --bg3:    #e5e5ea;
+      --text:   #1c1c1e;
+      --text2:  #636366;
+      --text3:  #aeaeb2;
+      --accent: #007aff;
+      --green:  #34c759;
+      --red:    #ff3b30;
+      --orange: #ff9500;
+      --border: rgba(0,0,0,0.10);
+      --r:      12px;
+      --rsm:    8px;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg:    #000000;
+        --bg2:   #1c1c1e;
+        --bg3:   #2c2c2e;
+        --text:  #ffffff;
+        --text2: #aeaeb2;
+        --text3: #636366;
+        --border: rgba(255,255,255,0.10);
+      }
+    }
+    *  { box-sizing:border-box; margin:0; padding:0; -webkit-tap-highlight-color:transparent; }
+    body { background:var(--bg); color:var(--text); font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; font-size:16px; overscroll-behavior:none; }
+    .app { max-width:430px; margin:0 auto; min-height:100dvh; display:flex; flex-direction:column; }
+
+    /* ── TAB BAR ── */
+    .tabs { position:sticky; top:0; z-index:100; display:flex; background:var(--bg2); border-bottom:1px solid var(--border); padding:env(safe-area-inset-top,0) 0 0; }
+    .tab  { flex:1; display:flex; flex-direction:column; align-items:center; gap:2px; padding:8px 0 6px; font-size:10px; color:var(--text3); cursor:pointer; border:none; background:none; transition:color .15s; }
+    .tab svg  { width:22px; height:22px; stroke-width:1.8; }
+    .tab.active { color:var(--accent); }
+
+    /* ── SCREENS ── */
+    .screen { display:none; flex:1; overflow-y:auto; padding-bottom:calc(env(safe-area-inset-bottom,0) + 20px); }
+    .screen.on { display:block; }
+
+    /* ── HEADER ── */
+    .hdr { background:var(--bg2); padding:16px 16px 20px; }
+    .clock { font-size:54px; font-weight:200; letter-spacing:-2px; line-height:1; }
+    .date-lbl { font-size:15px; color:var(--text2); margin-top:2px; }
+    .pill { display:inline-flex; align-items:center; gap:6px; background:var(--bg3); padding:5px 12px; border-radius:20px; font-size:13px; color:var(--text2); margin-top:10px; }
+    .dot { width:8px; height:8px; border-radius:50%; background:var(--text3); flex-shrink:0; }
+    .dot.working { background:var(--green); animation:pulse 1.5s infinite; }
+    .dot.paused  { background:var(--orange); }
+    .dot.done    { background:var(--accent); }
+    @keyframes pulse { 0%,100%{opacity:1}50%{opacity:.3} }
+
+    /* ── ALERTS ── */
+    .alert { margin:10px 16px 0; padding:10px 14px; border-radius:var(--rsm); font-size:13px; display:flex; gap:8px; align-items:flex-start; line-height:1.4; }
+    .alert.warn { background:#fff3cd; color:#7c4700; }
+    .alert.ok   { background:#d1f5d3; color:#155724; }
+    .alert.info { background:#cce5ff; color:#004085; }
+    @media (prefers-color-scheme:dark) {
+      .alert.warn { background:#3a2800; color:#ffcc80; }
+      .alert.ok   { background:#002a00; color:#80e080; }
+      .alert.info { background:#001f44; color:#80c0ff; }
+    }
+
+    /* ── BADGE CARDS ── */
+    .bgrid { display:grid; grid-template-columns:1fr 1fr; gap:10px; padding:14px 16px; }
+    .bcard { background:var(--bg2); border-radius:var(--r); padding:16px; cursor:pointer; border:2px solid transparent; transition:all .15s; position:relative; }
+    .bcard:active { transform:scale(.96); }
+    .bcard.done::after { content:'✓'; position:absolute; top:10px; right:12px; font-size:16px; color:var(--green); font-weight:600; }
+    .bcard.cur  { border-color:var(--accent); }
+    .bcard.dis  { opacity:.38; pointer-events:none; }
+    .bcard .ico { font-size:26px; margin-bottom:8px; display:block; }
+    .bcard .lbl { font-size:12px; color:var(--text2); }
+    .bcard .val { font-size:20px; font-weight:500; margin-top:2px; }
+
+    /* ── PROGRESS ── */
+    .prog-box  { padding:0 16px 12px; }
+    .prog-hdr  { display:flex; justify-content:space-between; font-size:13px; color:var(--text2); margin-bottom:6px; }
+    .prog-track{ height:6px; background:var(--bg3); border-radius:3px; overflow:hidden; }
+    .prog-fill { height:100%; border-radius:3px; background:var(--accent); transition:width .4s; }
+    .prog-fill.over { background:var(--green); }
+
+    /* ── STATS ── */
+    .sgrid { display:grid; grid-template-columns:1fr 1fr; gap:10px; padding:0 16px; }
+    .scard { background:var(--bg2); border-radius:var(--r); padding:14px 16px; }
+    .scard .slbl { font-size:11px; color:var(--text2); text-transform:uppercase; letter-spacing:.5px; }
+    .scard .sval { font-size:22px; font-weight:500; margin-top:4px; }
+    .pos { color:var(--green); } .neg { color:var(--red); } .neu { color:var(--text2); }
+
+    /* ── PERIOD TABS ── */
+    .pbar { display:flex; gap:6px; padding:14px 16px 0; }
+    .pbtn { padding:7px 16px; border-radius:20px; font-size:13px; border:none; cursor:pointer; background:var(--bg2); color:var(--text2); transition:all .15s; }
+    .pbtn.on { background:var(--accent); color:#fff; }
+
+    /* ── HISTORY ── */
+    .hsummary { margin:10px 16px; background:var(--bg2); border-radius:var(--r); overflow:hidden; }
+    .srow { display:flex; justify-content:space-between; align-items:center; padding:11px 16px; border-bottom:1px solid var(--border); }
+    .srow:last-child { border-bottom:none; }
+    .srow .sk { font-size:14px; color:var(--text2); }
+    .srow .sv { font-size:14px; font-weight:500; }
+    .hlist { padding:0 16px; }
+    .dcard { background:var(--bg2); border-radius:var(--rsm); padding:12px 14px; margin-bottom:6px; display:flex; justify-content:space-between; align-items:center; }
+    .dcard .dn  { font-size:14px; font-weight:500; }
+    .dcard .dd  { font-size:12px; color:var(--text2); margin-top:2px; }
+    .dcard .de  { font-size:15px; font-weight:600; }
+    .dtag { display:inline-block; font-size:10px; background:var(--bg3); color:var(--text2); padding:2px 6px; border-radius:4px; margin-top:3px; }
+
+    /* ── SECTION TITLE ── */
+    .stitle { font-size:12px; font-weight:600; color:var(--text2); text-transform:uppercase; letter-spacing:.5px; padding:16px 16px 6px; }
+
+    /* ── ABSENCE FORM ── */
+    .aform { background:var(--bg2); border-radius:var(--r); margin:0 16px; padding:16px; }
+    .frow  { margin-bottom:14px; }
+    .flbl  { font-size:12px; color:var(--text2); margin-bottom:4px; display:block; }
+    .finp, .fsel { width:100%; padding:10px 12px; border:1px solid var(--border); border-radius:var(--rsm); font-size:15px; background:var(--bg); color:var(--text); -webkit-appearance:none; }
+    .fr2  { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:14px; }
+    .acard { background:var(--bg2); border-radius:var(--rsm); padding:12px 14px; margin:0 16px 6px; display:flex; justify-content:space-between; align-items:center; }
+    .atype { font-size:11px; font-weight:700; text-transform:uppercase; color:var(--accent); margin-bottom:2px; }
+    .adates{ font-size:14px; }
+    .adays { font-size:12px; color:var(--text2); }
+    .xbtn  { background:none; border:none; cursor:pointer; color:var(--red); font-size:20px; padding:4px; line-height:1; }
+
+    /* ── BUTTONS ── */
+    .btn1 { width:100%; padding:13px; background:var(--accent); color:#fff; border:none; border-radius:var(--r); font-size:16px; font-weight:500; cursor:pointer; transition:opacity .15s; }
+    .btn1:active { opacity:.8; }
+    .btn2 { width:100%; padding:11px; background:var(--bg3); color:var(--text); border:none; border-radius:var(--r); font-size:15px; cursor:pointer; margin-top:8px; }
+    .btnd { background:var(--red); color:#fff; }
+
+    /* ── SETTINGS ── */
+    .setgrp { background:var(--bg2); border-radius:var(--r); margin:0 16px 14px; overflow:hidden; }
+    .setrow { display:flex; align-items:center; justify-content:space-between; padding:13px 16px; border-bottom:1px solid var(--border); flex-wrap:wrap; gap:8px; }
+    .setrow:last-child { border-bottom:none; }
+    .setlbl { font-size:15px; }
+    .setsub { font-size:12px; color:var(--text2); margin-top:2px; }
+    .setinp { border:none; background:transparent; text-align:right; font-size:14px; color:var(--accent); width:90px; }
+    .tinp { padding:5px 7px; border:1px solid var(--border); border-radius:6px; background:var(--bg); color:var(--text); font-size:13px; width:90px; }
+    .ninp { padding:5px 7px; border:1px solid var(--border); border-radius:6px; background:var(--bg); color:var(--text); font-size:13px; width:55px; }
+    .tog { width:50px; height:29px; background:var(--bg3); border-radius:15px; position:relative; cursor:pointer; transition:background .2s; flex-shrink:0; }
+    .tog.on { background:var(--green); }
+    .tog::after { content:''; width:25px; height:25px; background:#fff; border-radius:50%; position:absolute; top:2px; left:2px; transition:transform .2s; box-shadow:0 1px 4px rgba(0,0,0,.25); }
+    .tog.on::after { transform:translateX(21px); }
+
+    /* ── ONEDRIVE ── */
+    .odrow { display:flex; align-items:center; gap:8px; padding:12px 16px; font-size:13px; color:var(--text2); border-bottom:1px solid var(--border); }
+    .oddot { width:8px; height:8px; border-radius:50%; background:var(--text3); flex-shrink:0; }
+    .oddot.ok  { background:var(--green); }
+    .oddot.sync { background:var(--orange); animation:pulse 1s infinite; }
+    .oddot.err { background:var(--red); }
+
+    /* ── HOLIDAYS ── */
+    .hlrow { display:flex; justify-content:space-between; padding:10px 16px; border-bottom:1px solid var(--border); font-size:14px; }
+    .hlrow:last-child { border-bottom:none; }
+    .hldate { font-size:13px; color:var(--text2); }
+
+    /* ── FOOTER ── */
+    .foot { text-align:center; padding:20px 16px 8px; font-size:12px; color:var(--text3); }
+  </style>
+</head>
+<body>
+<div class="app">
+
+  <!-- ══════════════ TAB BAR ══════════════ -->
+  <nav class="tabs">
+    <button class="tab active" id="tab-badge" onclick="goTab('badge')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+      Badgeage
+    </button>
+    <button class="tab" id="tab-hist" onclick="goTab('hist')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+      Historique
+    </button>
+    <button class="tab" id="tab-abs" onclick="goTab('abs')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="2" y="3" width="20" height="18" rx="2"/><path d="M8 10h8M8 14h5"/></svg>
+      Absences
+    </button>
+    <button class="tab" id="tab-set" onclick="goTab('set')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33A1.65 1.65 0 0 0 14 20.9V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68A1.65 1.65 0 0 0 10 3.1V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+      Réglages
+    </button>
+  </nav>
+
+  <!-- ══════════════ SCREEN : BADGEAGE ══════════════ -->
+  <section class="screen on" id="s-badge">
+    <div class="hdr">
+      <div class="clock" id="clk">--:--</div>
+      <div class="date-lbl" id="datelbl">--</div>
+      <div class="pill"><div class="dot" id="sdot"></div><span id="stxt">Prêt à badger</span></div>
+    </div>
+
+    <div id="alertZone"></div>
+
+    <div class="bgrid">
+      <div class="bcard cur"  id="bc-arrivee"    onclick="doBadge('arrivee')">
+        <span class="ico">🚶</span><span class="lbl">Arrivée</span>
+        <div class="val" id="bv-arrivee">--:--</div>
+      </div>
+      <div class="bcard dis"  id="bc-pauseDebut" onclick="doBadge('pauseDebut')">
+        <span class="ico">☕</span><span class="lbl">Début pause</span>
+        <div class="val" id="bv-pauseDebut">--:--</div>
+      </div>
+      <div class="bcard dis"  id="bc-pauseFin"   onclick="doBadge('pauseFin')">
+        <span class="ico">▶️</span><span class="lbl">Fin pause</span>
+        <div class="val" id="bv-pauseFin">--:--</div>
+      </div>
+      <div class="bcard dis"  id="bc-depart"     onclick="doBadge('depart')">
+        <span class="ico">🏠</span><span class="lbl">Départ</span>
+        <div class="val" id="bv-depart">--:--</div>
+      </div>
+    </div>
+
+    <div class="prog-box">
+      <div class="prog-hdr"><span>Progression journée</span><span id="progLbl">0min / --</span></div>
+      <div class="prog-track"><div class="prog-fill" id="progFill" style="width:0%"></div></div>
+    </div>
+
+    <div class="sgrid">
+      <div class="scard"><div class="slbl">Travaillé</div><div class="sval neu" id="ss-jour">--</div></div>
+      <div class="scard"><div class="slbl">Supp. jour</div><div class="sval neu" id="ss-jour-extra">--</div></div>
+      <div class="scard"><div class="slbl">Supp. semaine</div><div class="sval neu" id="ss-sem">--</div></div>
+      <div class="scard"><div class="slbl">Supp. mois</div><div class="sval neu" id="ss-mois">--</div></div>
+    </div>
+  </section>
+
+  <!-- ══════════════ SCREEN : HISTORIQUE ══════════════ -->
+  <section class="screen" id="s-hist">
+    <div class="pbar">
+      <button class="pbtn on" onclick="setPer('week',this)">Semaine</button>
+      <button class="pbtn"    onclick="setPer('month',this)">Mois</button>
+      <button class="pbtn"    onclick="setPer('year',this)">Année</button>
+    </div>
+    <div class="hsummary" id="hsum"></div>
+    <div class="stitle">Détail par jour</div>
+    <div class="hlist"   id="hlist"></div>
+  </section>
+
+  <!-- ══════════════ SCREEN : ABSENCES ══════════════ -->
+  <section class="screen" id="s-abs">
+    <div class="stitle">Ajouter une absence</div>
+    <div class="aform">
+      <div class="frow">
+        <label class="flbl">Type</label>
+        <select class="fsel" id="a-type">
+          <option value="CP">Congés payés (CP)</option>
+          <option value="RTT">RTT</option>
+          <option value="Maladie">Maladie</option>
+          <option value="Férié">Jour férié manuel</option>
+          <option value="Formation">Formation</option>
+          <option value="Autre">Autre</option>
+        </select>
+      </div>
+      <div class="fr2">
+        <div><label class="flbl">Du</label><input type="date" class="finp" id="a-from"></div>
+        <div><label class="flbl">Au</label><input type="date" class="finp" id="a-to"></div>
+      </div>
+      <div class="frow">
+        <label class="flbl">Note (optionnel)</label>
+        <input type="text" class="finp" id="a-note" placeholder="Vacances été…">
+      </div>
+      <button class="btn1" onclick="addAbs()">Ajouter</button>
+    </div>
+    <div class="stitle">Absences enregistrées</div>
+    <div id="absList"></div>
+  </section>
+
+  <!-- ══════════════ SCREEN : RÉGLAGES ══════════════ -->
+  <section class="screen" id="s-set">
+    <div class="stitle">Planning hebdomadaire</div>
+    <div class="setgrp" id="schedGrp"></div>
+
+    <div class="stitle">Plages horaires</div>
+    <div class="setgrp">
+      <div class="setrow"><div><div class="setlbl">Arrivée — au plus tôt</div></div><input type="time" class="tinp" id="pl-arrMin" onchange="savePlages()"></div>
+      <div class="setrow"><div><div class="setlbl">Arrivée — au plus tard</div></div><input type="time" class="tinp" id="pl-arrMax" onchange="savePlages()"></div>
+      <div class="setrow"><div><div class="setlbl">Départ — au plus tôt</div></div><input type="time" class="tinp" id="pl-depMin" onchange="savePlages()"></div>
+      <div class="setrow"><div><div class="setlbl">Départ — au plus tard</div></div><input type="time" class="tinp" id="pl-depMax" onchange="savePlages()"></div>
+      <div class="setrow"><div><div class="setlbl">Pause minimale</div></div><span><input type="number" class="ninp" id="pl-pauseMin" min="0" max="120" onchange="savePlages()"> min</span></div>
+    </div>
+
+    <div class="stitle">OneDrive</div>
+    <div class="setgrp">
+      <div class="odrow"><div class="oddot" id="oddot"></div><span id="odstatus">Non connecté</span></div>
+      <div class="setrow">
+        <div><div class="setlbl">Client ID Azure</div><div class="setsub">Voir README pour obtenir l'ID</div></div>
+        <input type="text" id="od-cid" placeholder="xxxxxxxx-xxxx-…" style="width:130px;padding:5px 7px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);font-size:12px;" onchange="saveOdCfg()">
+      </div>
+      <div class="setrow" style="flex-direction:column;align-items:stretch;gap:8px;padding:12px 16px;">
+        <button class="btn1" onclick="odLogin()">🔗 Connecter OneDrive</button>
+        <button class="btn2" onclick="odSync()">☁️ Synchroniser maintenant</button>
+        <button class="btn2" onclick="odLogout()">Déconnecter</button>
+      </div>
+    </div>
+
+    <div class="stitle">Jours fériés <span id="fyear"></span></div>
+    <div class="setgrp" id="flist"></div>
+
+    <div class="stitle">Données</div>
+    <div class="setgrp">
+      <div class="setrow" style="flex-direction:column;align-items:stretch;gap:8px;padding:14px 16px;">
+        <button class="btn2" onclick="doExportCSV()">📊 Exporter CSV (Excel)</button>
+        <button class="btn2" onclick="doExportJSON()">💾 Exporter JSON (sauvegarde)</button>
+        <button class="btn2" onclick="doImport()">📂 Importer JSON</button>
+        <button class="btn2 btnd" onclick="resetToday()">🔄 Réinitialiser aujourd'hui</button>
+        <input type="file" id="importFile" accept=".json" style="display:none" onchange="handleImport(event)">
+      </div>
+    </div>
+
+    <div class="foot">Pointeuse v2.0 · Contrat 39 h/sem</div>
+  </section>
+
+</div><!-- .app -->
+
+<!-- MSAL — chargé de manière asynchrone, utilisé seulement si OneDrive est configuré -->
+<script>
+(function(){
+  var s=document.createElement('script');
+  s.src='https://alcdn.msauth.net/browser/2.38.3/js/msal-browser.min.js';
+  s.async=true; s.id='msalScript';
+  document.head.appendChild(s);
+})();
+</script>
+<script>
+'use strict';
+
+// ══════════════════════════════════════════════════════════════
+//  CONSTANTS & DEFAULTS
+// ══════════════════════════════════════════════════════════════
+const DFLT_SCHED = {
+  1:{active:true,  start:'08:00',end:'16:40',pause:40},  // Lundi
+  2:{active:true,  start:'08:00',end:'16:40',pause:40},  // Mardi
+  3:{active:true,  start:'08:00',end:'16:40',pause:40},  // Mercredi
+  4:{active:true,  start:'08:00',end:'16:40',pause:40},  // Jeudi
+  5:{active:true,  start:'08:00',end:'16:00',pause:40},  // Vendredi
+  6:{active:false, start:'08:00',end:'12:00',pause:0 },  // Samedi
+  0:{active:false, start:'08:00',end:'12:00',pause:0 },  // Dimanche
+};
+const DFLT_PLAGES = {arrMin:'07:00',arrMax:'09:00',depMin:'16:00',depMax:'18:30',pauseMin:40};
+const DNAMES  = ['Dimanche','Lundi','Mardi','Mercredi','Jeudi','Vendredi','Samedi'];
+const DSHORT  = ['dim','lun','mar','mer','jeu','ven','sam'];
+const MNAMES  = ['janvier','février','mars','avril','mai','juin','juillet','août','septembre','octobre','novembre','décembre'];
+const OD_FILE = 'pointeuse_data.json';
+const OD_SCOPES = ['Files.ReadWrite','User.Read'];
+
+// ══════════════════════════════════════════════════════════════
+//  STORAGE
+// ══════════════════════════════════════════════════════════════
+function load(){try{return JSON.parse(localStorage.getItem('pt2')||'{}')}catch(e){return {}}}
+function save(d){localStorage.setItem('pt2',JSON.stringify(d))}
+function pad(n){return String(n).padStart(2,'0')}
+function todayKey(){const d=new Date();return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate())}
+function dateToKey(d){return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate())}
+function keyToDate(k){return new Date(k+'T00:00:00')}
+
+// ══════════════════════════════════════════════════════════════
+//  SCHEDULE
+// ══════════════════════════════════════════════════════════════
+function getSched(){
+  const d=load(); const s=d.schedule||{};
+  const out={};
+  for(let i=0;i<7;i++) out[i]=Object.assign({},DFLT_SCHED[i],s[i]||{});
+  return out;
+}
+function getPlages(){return Object.assign({},DFLT_PLAGES,(load().plages||{}))}
+function dailyTarget(dow){ // minutes
+  const s=getSched()[dow];
+  if(!s||!s.active)return 0;
+  const[sh,sm]=s.start.split(':').map(Number);
+  const[eh,em]=s.end.split(':').map(Number);
+  return(eh*60+em)-(sh*60+sm)-(s.pause||0);
+}
+function weeklyTarget(){let t=0;for(let i=0;i<7;i++)t+=dailyTarget(i);return t}
+
+// ══════════════════════════════════════════════════════════════
+//  FRENCH PUBLIC HOLIDAYS
+// ══════════════════════════════════════════════════════════════
+function easterDate(y){
+  const a=y%19,b=Math.floor(y/100),c=y%100,d=Math.floor(b/4),e=b%4,
+        f=Math.floor((b+8)/25),g=Math.floor((b-f+1)/3),
+        h=(19*a+b-d-g+15)%30,i=Math.floor(c/4),k=c%4,
+        l=(32+2*e+2*i-h-k)%7,m=Math.floor((a+11*h+22*l)/451),
+        mo=Math.floor((h+l-7*m+114)/31),dy=((h+l-7*m+114)%31)+1;
+  return new Date(y,mo-1,dy);
+}
+function addDays(d,n){const r=new Date(d);r.setDate(r.getDate()+n);return r}
+function holidays(y){
+  const e=easterDate(y);
+  return {
+    [dateToKey(new Date(y,0,1))]:   "Jour de l'An",
+    [dateToKey(addDays(e,1))]:      "Lundi de Pâques",
+    [dateToKey(new Date(y,4,1))]:   "Fête du Travail",
+    [dateToKey(new Date(y,4,8))]:   "Victoire 1945",
+    [dateToKey(addDays(e,39))]:     "Ascension",
+    [dateToKey(addDays(e,50))]:     "Lundi de Pentecôte",
+    [dateToKey(new Date(y,6,14))]:  "Fête Nationale",
+    [dateToKey(new Date(y,7,15))]:  "Assomption",
+    [dateToKey(new Date(y,10,1))]:  "Toussaint",
+    [dateToKey(new Date(y,10,11))]: "Armistice 1918",
+    [dateToKey(new Date(y,11,25))]: "Noël",
+  };
+}
+function isHoliday(key){return holidays(parseInt(key))[key]||null}
+
+// ══════════════════════════════════════════════════════════════
+//  ABSENCES
+// ══════════════════════════════════════════════════════════════
+function getAbs(){return load().absences||[]}
+function isAbsent(key){return getAbs().find(a=>key>=a.from&&key<=(a.to||a.from))||null}
+
+// ══════════════════════════════════════════════════════════════
+//  TIME HELPERS
+// ══════════════════════════════════════════════════════════════
+function fmtTs(ts){if(!ts)return '--:--';const d=new Date(ts);return pad(d.getHours())+':'+pad(d.getMinutes())}
+function fmtMin(m,sign){
+  if(m===null||isNaN(m))return '--';
+  const s=sign?(m>=0?'+':'-'):(m<0?'-':'');
+  const abs=Math.abs(Math.round(m));
+  const h=Math.floor(abs/60),mn=abs%60;
+  return h>0?s+h+'h'+pad(mn):s+mn+'min';
+}
+function cc(m){return m>0?'pos':m<0?'neg':'neu'}
+function calcWorked(day){
+  if(!day||!day.arrivee)return null;
+  const end=day.depart||Date.now();
+  let gross=(end-day.arrivee)/60000;
+  let pause=0;
+  if(day.pauseDebut){
+    const pe=day.pauseFin||(day.depart?day.pauseDebut+40*60000:Date.now());
+    pause=(pe-day.pauseDebut)/60000;
+  }
+  return Math.max(0,gross-pause);
+}
+
+// ══════════════════════════════════════════════════════════════
+//  OVERTIME CALCULATIONS
+// ══════════════════════════════════════════════════════════════
+function weekStart(d){const r=new Date(d);r.setHours(0,0,0,0);const dw=r.getDay()||7;r.setDate(r.getDate()-dw+1);return r}
+function periodExtra(from,to){
+  const data=load();const days=data.days||{};
+  let tot=0;const d=new Date(from);d.setHours(0,0,0,0);const end=new Date(to);end.setHours(23,59,59);
+  while(d<=end){
+    const key=dateToKey(d);const dow=d.getDay();const tgt=dailyTarget(dow);
+    if(tgt>0&&!isHoliday(key)&&!isAbsent(key)){
+      const w=calcWorked(days[key]||{});
+      if(w!==null)tot+=w-tgt;
+    }
+    d.setDate(d.getDate()+1);
+  }
+  return tot;
+}
+
+// ══════════════════════════════════════════════════════════════
+//  BADGE
+// ══════════════════════════════════════════════════════════════
+const ORDER=['arrivee','pauseDebut','pauseFin','depart'];
+
+function doBadge(type){
+  const data=load();const key=todayKey();
+  if(!data.days)data.days={};
+  if(!data.days[key])data.days[key]={};
+  const day=data.days[key];
+  const idx=ORDER.indexOf(type);
+  if(idx>0&&!day[ORDER[idx-1]])return;
+  if(day[type])return;
+  const now=Date.now();
+  const p=getPlages();
+  const nh=new Date().getHours(),nm=new Date().getMinutes(),curMin=nh*60+nm;
+  day[type]=now;
+  let msg='',mt='ok';
+  function tMin(t){const[h,m]=t.split(':').map(Number);return h*60+m}
+  if(type==='arrivee'){
+    if(curMin<tMin(p.arrMin)){msg=`⚠️ Arrivée avant ${p.arrMin} — hors plage`;mt='warn';}
+    else if(curMin>tMin(p.arrMax)){msg=`⚠️ Arrivée après ${p.arrMax} — hors plage`;mt='warn';}
+    else{msg='✅ Bonne journée !';}
+  }else if(type==='pauseDebut'){
+    msg=`☕ Bonne pause ! (min ${p.pauseMin} min)`;mt='info';
+  }else if(type==='pauseFin'){
+    const dur=(now-day.pauseDebut)/60000;
+    if(dur<p.pauseMin){msg=`⚠️ Pause trop courte (${Math.round(dur)} min < ${p.pauseMin} min)`;mt='warn';}
+    else{msg=`✅ Pause de ${Math.round(dur)} min — bon appétit !`;}
+  }else if(type==='depart'){
+    if(curMin<tMin(p.depMin)){msg=`⚠️ Départ avant ${p.depMin} — hors plage`;mt='warn';}
+    else if(curMin>tMin(p.depMax)){msg=`⚠️ Départ après ${p.depMax} — hors plage`;mt='warn';}
+    else{const w=calcWorked(day);msg=`✅ Bonne soirée ! · ${fmtMin(w)} travaillés`;}
+  }
+  save(data);
+  showAlert(msg,mt,4000);
+  renderBadge();
+  if(odConnected())odSync();
+}
+
+// ══════════════════════════════════════════════════════════════
+//  RENDER BADGE SCREEN
+// ══════════════════════════════════════════════════════════════
+function renderBadge(){
+  const data=load();const key=todayKey();const day=(data.days||{})[key]||{};
+  const ids=['bc-arrivee','bc-pauseDebut','bc-pauseFin','bc-depart'];
+  ORDER.forEach((t,i)=>{
+    const card=document.getElementById(ids[i]);
+    document.getElementById('bv-'+t).textContent=fmtTs(day[t]);
+    card.className='bcard';
+    if(day[t])card.classList.add('done');
+    else if(i===0||day[ORDER[i-1]])card.classList.add('cur');
+    else card.classList.add('dis');
+  });
+  // Status
+  const dot=document.getElementById('sdot'),txt=document.getElementById('stxt');
+  dot.className='dot';
+  if(day.depart){dot.classList.add('done');txt.textContent='Journée terminée';}
+  else if(day.pauseFin){dot.classList.add('working');txt.textContent='En cours de travail';}
+  else if(day.pauseDebut){dot.classList.add('paused');txt.textContent='En pause déjeuner';}
+  else if(day.arrivee){dot.classList.add('working');txt.textContent='En cours de travail';}
+  else{txt.textContent='Prêt à badger';}
+  // Alert for holiday/absence (only if no user alert visible)
+  const zone=document.getElementById('alertZone');
+  if(!zone.innerHTML){
+    const h=isHoliday(key);const a=isAbsent(key);
+    if(h)showAlert(`🎉 Aujourd'hui : ${h}`,'info',0);
+    else if(a)showAlert(`📅 Absence : ${a.type}${a.note?' — '+a.note:''}`,'info',0);
+  }
+  // Progress
+  const dow=new Date().getDay();const tgt=dailyTarget(dow);
+  const worked=calcWorked(day);
+  const pct=tgt>0&&worked!==null?Math.min(110,(worked/tgt)*100):0;
+  const fill=document.getElementById('progFill');
+  fill.style.width=pct+'%';fill.className='prog-fill'+(pct>=100?' over':'');
+  document.getElementById('progLbl').textContent=(worked!==null?fmtMin(worked):'0min')+' / '+fmtMin(tgt);
+  // Stats
+  const extra=worked!==null&&tgt>0?worked-tgt:null;
+  setStat('ss-jour',worked!==null?fmtMin(worked):'--','neu');
+  setStat('ss-jour-extra',extra!==null?fmtMin(extra,true):'--',extra!==null?cc(extra):'neu');
+  const now=new Date();
+  setStat('ss-sem',fmtMin(periodExtra(weekStart(now),now),true),cc(periodExtra(weekStart(now),now)));
+  const ms=new Date(now.getFullYear(),now.getMonth(),1);
+  setStat('ss-mois',fmtMin(periodExtra(ms,now),true),cc(periodExtra(ms,now)));
+}
+function setStat(id,val,cls){const e=document.getElementById(id);e.textContent=val;e.className='sval '+cls;}
+
+// ══════════════════════════════════════════════════════════════
+//  HISTORY
+// ══════════════════════════════════════════════════════════════
+let curPer='week';
+function setPer(p,btn){curPer=p;document.querySelectorAll('.pbtn').forEach(b=>b.classList.remove('on'));btn.classList.add('on');renderHist();}
+function renderHist(){
+  const data=load();const days=data.days||{};const now=new Date();
+  let from;
+  if(curPer==='week')from=weekStart(now);
+  else if(curPer==='month')from=new Date(now.getFullYear(),now.getMonth(),1);
+  else from=new Date(now.getFullYear(),0,1);
+  const entries=[];
+  const d=new Date(from);d.setHours(0,0,0,0);
+  while(d<=now){
+    const key=dateToKey(d);const dow=d.getDay();const tgt=dailyTarget(dow);
+    const dd=days[key];const h=isHoliday(key);const a=isAbsent(key);
+    const w=calcWorked(dd||{});
+    if(tgt>0||w!==null)
+      entries.unshift({key,date:new Date(d),tgt,worked:w,holiday:h,absent:a,extra:w!==null&&tgt>0&&!h&&!a?w-tgt:null});
+    d.setDate(d.getDate()+1);
+  }
+  let totW=0,totE=0,wDays=0;
+  entries.forEach(e=>{if(e.worked!==null&&!e.holiday&&!e.absent){totW+=e.worked;wDays++;}if(e.extra!==null)totE+=e.extra;});
+  const lbl=curPer==='week'?'Semaine en cours':curPer==='month'?'Mois en cours':'Année en cours';
+  document.getElementById('hsum').innerHTML=`
+    <div class="srow"><span class="sk">${lbl}</span><span></span></div>
+    <div class="srow"><span class="sk">Jours travaillés</span><span class="sv">${wDays}</span></div>
+    <div class="srow"><span class="sk">Temps total travaillé</span><span class="sv">${fmtMin(totW)}</span></div>
+    <div class="srow"><span class="sk">Heures supplémentaires</span><span class="sv" style="color:${totE>=0?'var(--green)':'var(--red)'}">${fmtMin(totE,true)}</span></div>`;
+  if(!entries.length){document.getElementById('hlist').innerHTML='<div style="text-align:center;color:var(--text2);padding:2rem;font-size:14px;">Aucune donnée pour cette période</div>';return;}
+  document.getElementById('hlist').innerHTML=entries.map(e=>{
+    const dd=days[e.key]||{};
+    const dn=DSHORT[e.date.getDay()]+' '+pad(e.date.getDate())+'/'+pad(e.date.getMonth()+1);
+    const arr=fmtTs(dd.arrivee),dep=fmtTs(dd.depart);
+    const pauseDur=dd.pauseDebut&&dd.pauseFin?Math.round((dd.pauseFin-dd.pauseDebut)/60000)+'min':'--';
+    let tag='';
+    if(e.holiday)tag=`<div class="dtag">🎉 ${e.holiday}</div>`;
+    else if(e.absent)tag=`<div class="dtag">📅 ${e.absent.type}</div>`;
+    const ev=e.extra!==null?fmtMin(e.extra,true):(e.holiday||e.absent?'—':'--');
+    const ec=e.extra!==null?(e.extra>=0?'var(--green)':'var(--red)'):'var(--text3)';
+    return `<div class="dcard"><div><div class="dn">${dn}</div><div class="dd">${arr} → ${dep} · pause ${pauseDur}</div>${tag}</div><div class="de" style="color:${ec}">${ev}</div></div>`;
+  }).join('');
+}
+
+// ══════════════════════════════════════════════════════════════
+//  ABSENCES
+// ══════════════════════════════════════════════════════════════
+function addAbs(){
+  const type=document.getElementById('a-type').value;
+  const from=document.getElementById('a-from').value;
+  const to=document.getElementById('a-to').value||from;
+  const note=document.getElementById('a-note').value.trim();
+  if(!from){alert('Saisissez une date de début');return;}
+  const data=load();if(!data.absences)data.absences=[];
+  data.absences.push({id:Date.now(),type,from,to,note});
+  data.absences.sort((a,b)=>a.from.localeCompare(b.from));
+  save(data);
+  document.getElementById('a-from').value=todayKey();
+  document.getElementById('a-to').value=todayKey();
+  document.getElementById('a-note').value='';
+  renderAbs();renderBadge();
+}
+function delAbs(id){const data=load();data.absences=(data.absences||[]).filter(a=>a.id!==id);save(data);renderAbs();renderBadge();}
+function renderAbs(){
+  const abs=getAbs();
+  if(!abs.length){document.getElementById('absList').innerHTML='<div style="text-align:center;color:var(--text2);padding:2rem;font-size:14px;">Aucune absence enregistrée</div>';return;}
+  document.getElementById('absList').innerHTML=[...abs].reverse().map(a=>{
+    const fd=keyToDate(a.from);const td=keyToDate(a.to||a.from);
+    const n=Math.round((td-fd)/86400000)+1;
+    const ff=DSHORT[fd.getDay()]+' '+pad(fd.getDate())+'/'+pad(fd.getMonth()+1);
+    const tf=a.to&&a.to!==a.from?' → '+DSHORT[td.getDay()]+' '+pad(td.getDate())+'/'+pad(td.getMonth()+1):'';
+    return `<div class="acard"><div><div class="atype">${a.type}</div><div class="adates">${ff}${tf}</div><div class="adays">${n} jour${n>1?'s':''}${a.note?' · '+a.note:''}</div></div><button class="xbtn" onclick="delAbs(${a.id})">✕</button></div>`;
+  }).join('');
+}
+
+// ══════════════════════════════════════════════════════════════
+//  SETTINGS
+// ══════════════════════════════════════════════════════════════
+function renderSched(){
+  const sched=getSched();
+  const dnames=['Lundi','Mardi','Mercredi','Jeudi','Vendredi','Samedi','Dimanche'];
+  const dows=[1,2,3,4,5,6,0];
+  document.getElementById('schedGrp').innerHTML=dows.map((dw,i)=>{
+    const s=sched[dw];const tgt=dailyTarget(dw);
+    return`<div class="setrow">
+      <div style="flex:1;min-width:90px;">
+        <div class="setlbl">${dnames[i]}</div>
+        <div class="setsub">${s.active?`${s.start}→${s.end} · pause ${s.pause}min · ${fmtMin(tgt)}`:'Repos'}</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;justify-content:flex-end;">
+        ${s.active?`<input type="time" value="${s.start}" onchange="updSched(${dw},'start',this.value)" class="tinp" style="width:84px;">
+        <input type="time" value="${s.end}"   onchange="updSched(${dw},'end',this.value)"   class="tinp" style="width:84px;">
+        <input type="number" value="${s.pause}" min="0" max="120" onchange="updSched(${dw},'pause',this.value)" class="ninp"> <span style="font-size:13px;color:var(--text2)">min</span>`:''}
+        <div class="tog ${s.active?'on':''}" onclick="togDay(${dw})"></div>
+      </div></div>`;
+  }).join('');
+}
+function togDay(dw){const data=load();if(!data.schedule)data.schedule={};const s=Object.assign({},DFLT_SCHED[dw],data.schedule[dw]||{});s.active=!s.active;data.schedule[dw]=s;save(data);renderSched();renderBadge();}
+function updSched(dw,field,val){const data=load();if(!data.schedule)data.schedule={};if(!data.schedule[dw])data.schedule[dw]=Object.assign({},DFLT_SCHED[dw]);data.schedule[dw][field]=field==='pause'?parseInt(val):val;save(data);renderSched();renderBadge();}
+function renderPlages(){const p=getPlages();['arrMin','arrMax','depMin','depMax'].forEach(k=>{document.getElementById('pl-'+k).value=p[k];});document.getElementById('pl-pauseMin').value=p.pauseMin;}
+function savePlages(){const data=load();data.plages={arrMin:document.getElementById('pl-arrMin').value,arrMax:document.getElementById('pl-arrMax').value,depMin:document.getElementById('pl-depMin').value,depMax:document.getElementById('pl-depMax').value,pauseMin:parseInt(document.getElementById('pl-pauseMin').value)||40};save(data);}
+function renderHolidays(){
+  const y=new Date().getFullYear();document.getElementById('fyear').textContent=y;
+  const hl=holidays(y);
+  document.getElementById('flist').innerHTML=Object.entries(hl).map(([k,v])=>{
+    const d=keyToDate(k);return`<div class="hlrow"><span>${v}</span><span class="hldate">${DSHORT[d.getDay()]} ${pad(d.getDate())}/${pad(d.getMonth()+1)}</span></div>`;
+  }).join('');
+}
+
+// ══════════════════════════════════════════════════════════════
+//  EXPORT / IMPORT
+// ══════════════════════════════════════════════════════════════
+function doExportCSV(){
+  const data=load();const days=data.days||{};
+  let csv='Date,Jour,Arrivée,Déb.pause,Fin pause,Départ,Travaillé(min),Objectif(min),Supp/Déf(min),Absence,Férié\n';
+  Object.entries(days).sort().forEach(([key,day])=>{
+    const d=keyToDate(key);const dow=d.getDay();const tgt=dailyTarget(dow);
+    const w=calcWorked(day);const ab=isAbsent(key);const hl=isHoliday(key);
+    const ex=w!==null&&tgt>0?Math.round(w-tgt):'';
+    csv+=[key,DSHORT[dow],fmtTs(day.arrivee),fmtTs(day.pauseDebut),fmtTs(day.pauseFin),fmtTs(day.depart),w!==null?Math.round(w):'',tgt,ex,ab?ab.type:'',hl||''].join(',')+'\n';
+  });
+  dlFile('pointeuse_'+todayKey()+'.csv','data:text/csv;charset=utf-8,'+encodeURIComponent(csv));
+}
+function doExportJSON(){const data=load();dlFile('pointeuse_'+todayKey()+'.json','data:application/json;charset=utf-8,'+encodeURIComponent(JSON.stringify(data,null,2)));}
+function doImport(){document.getElementById('importFile').click();}
+function handleImport(e){
+  const f=e.target.files[0];if(!f)return;
+  const r=new FileReader();
+  r.onload=ev=>{
+    try{
+      const d=JSON.parse(ev.target.result);
+      if(confirm('Fusionner ces données avec les données locales ?')){
+        const ex=load();const mg=Object.assign({},ex,d);
+        if(ex.days&&d.days)mg.days=Object.assign({},ex.days,d.days);
+        if(ex.absences&&d.absences)mg.absences=[...(ex.absences||[]),...(d.absences||[])].filter((a,i,ar)=>ar.findIndex(b=>b.id===a.id)===i);
+        save(mg);renderAll();showAlert('✅ Données importées avec succès','ok',3000);
+      }
+    }catch(err){alert('Erreur import : '+err.message);}
+  };
+  r.readAsText(f);
+}
+function dlFile(name,url){const a=document.createElement('a');a.href=url;a.download=name;a.click();}
+function resetToday(){if(!confirm('Réinitialiser la journée en cours ?'))return;const d=load();if(d.days)delete d.days[todayKey()];save(d);renderBadge();showAlert('Journée réinitialisée','info',2000);}
+
+// ══════════════════════════════════════════════════════════════
+//  ONEDRIVE — MSAL + Microsoft Graph
+// ══════════════════════════════════════════════════════════════
+let msalApp=null, odAcc=null;
+
+function getOdCfg(){return(load().odCfg||{})}
+function saveOdCfg(){const d=load();d.odCfg={clientId:document.getElementById('od-cid').value.trim()};save(d);}
+
+function initMsal(){
+  const cfg=getOdCfg();if(!cfg.clientId)return null;
+  try{
+    if(typeof msal==='undefined')return null;
+    const redirectUri=window.location.href.split('?')[0].split('#')[0];
+    return new msal.PublicClientApplication({
+      auth:{clientId:cfg.clientId,authority:'https://login.microsoftonline.com/common',redirectUri},
+      cache:{cacheLocation:'localStorage',storeAuthStateInCookie:true}
+    });
+  }catch(e){console.warn('MSAL init:',e);return null;}
+}
+function odConnected(){return!!(msalApp&&odAcc)}
+async function odLogin(){
+  msalApp=initMsal();
+  if(!msalApp){alert('Saisissez d\'abord le Client ID Azure dans les réglages (voir README).');return;}
+  try{
+    const r=await msalApp.loginPopup({scopes:OD_SCOPES});
+    odAcc=r.account;updOd('ok','Connecté : '+odAcc.username);
+    await odSync();
+  }catch(e){updOd('err','Erreur : '+e.message);}
+}
+async function odLogout(){if(msalApp&&odAcc){await msalApp.logoutPopup({account:odAcc});odAcc=null;updOd('','Déconnecté');}}
+async function getToken(){
+  if(!msalApp||!odAcc)return null;
+  try{const r=await msalApp.acquireTokenSilent({scopes:OD_SCOPES,account:odAcc});return r.accessToken;}
+  catch(e){const r=await msalApp.acquireTokenPopup({scopes:OD_SCOPES});return r.accessToken;}
+}
+async function odSync(){
+  if(!odConnected())return;
+  updOd('sync','Synchronisation…');
+  try{
+    const tok=await getToken();
+    let remote=null;
+    const gr=await fetch(`https://graph.microsoft.com/v1.0/me/drive/root:/${OD_FILE}:/content`,{headers:{Authorization:'Bearer '+tok}});
+    if(gr.ok){try{remote=await gr.json();}catch(e){}}
+    const local=load();
+    let mg=local;
+    if(remote){
+      mg=Object.assign({},remote,local);
+      if(remote.days&&local.days)mg.days=Object.assign({},remote.days,local.days);
+      if(remote.absences&&local.absences)mg.absences=[...(remote.absences||[]),...(local.absences||[])].filter((a,i,ar)=>ar.findIndex(b=>b.id===a.id)===i);
+    }
+    await fetch(`https://graph.microsoft.com/v1.0/me/drive/root:/${OD_FILE}:/content`,{
+      method:'PUT',headers:{Authorization:'Bearer '+tok,'Content-Type':'application/json'},
+      body:JSON.stringify(mg,null,2)
+    });
+    save(mg);
+    const t=new Date();updOd('ok',`Synchro à ${pad(t.getHours())}:${pad(t.getMinutes())}`);
+    renderAll();
+  }catch(e){updOd('err','Erreur : '+e.message);}
+}
+function updOd(state,txt){
+  const dot=document.getElementById('oddot');
+  dot.className='oddot'+(state==='ok'?' ok':state==='sync'?' sync':state==='err'?' err':'');
+  document.getElementById('odstatus').textContent=txt;
+}
+
+// ══════════════════════════════════════════════════════════════
+//  ALERT
+// ══════════════════════════════════════════════════════════════
+let alertTimer=null;
+function showAlert(msg,type,dur){
+  const z=document.getElementById('alertZone');
+  if(!msg){z.innerHTML='';return;}
+  z.innerHTML=`<div class="alert ${type}">${msg}</div>`;
+  clearTimeout(alertTimer);
+  if(dur!==0)alertTimer=setTimeout(()=>{if(z.innerHTML.includes(msg))z.innerHTML='';},dur||4000);
+}
+
+// ══════════════════════════════════════════════════════════════
+//  TAB NAVIGATION
+// ══════════════════════════════════════════════════════════════
+function goTab(name){
+  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('on'));
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  document.getElementById('s-'+name).classList.add('on');
+  document.getElementById('tab-'+name).classList.add('active');
+  if(name==='hist')renderHist();
+  if(name==='abs')renderAbs();
+  if(name==='set'){renderSched();renderPlages();renderHolidays();const c=getOdCfg();document.getElementById('od-cid').value=c.clientId||'';}
+}
+
+// ══════════════════════════════════════════════════════════════
+//  CLOCK & INIT
+// ══════════════════════════════════════════════════════════════
+function renderAll(){renderBadge();}
+function tick(){
+  const n=new Date();
+  document.getElementById('clk').textContent=pad(n.getHours())+':'+pad(n.getMinutes());
+  document.getElementById('datelbl').textContent=DNAMES[n.getDay()]+' '+n.getDate()+' '+MNAMES[n.getMonth()]+' '+n.getFullYear();
+}
+tick();
+setInterval(tick,10000);
+setInterval(()=>{if(document.getElementById('s-badge').classList.contains('on'))renderBadge();},30000);
+
+// Set default dates in absence form
+document.getElementById('a-from').value=todayKey();
+document.getElementById('a-to').value=todayKey();
+
+// Init render
+renderBadge();
+
+// Try to restore MSAL session
+window.addEventListener('load',async()=>{
+  msalApp=initMsal();
+  if(msalApp){
+    try{
+      const accs=msalApp.getAllAccounts();
+      if(accs.length){odAcc=accs[0];updOd('ok','Connecté : '+odAcc.username);}
+    }catch(e){}
+  }
+});
+
+// Service Worker
+if('serviceWorker'in navigator){
+  navigator.serviceWorker.register('sw.js').catch(e=>console.log('SW:',e));
+}
+</script>
+</body>
+</html>
